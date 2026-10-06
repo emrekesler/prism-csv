@@ -1,0 +1,21 @@
+# Paket çıktısı (npm run package)
+*.vsix
+
+# Bağımlılıklar ve eklenti test ortamı
+node_modules/
+.vscode-test/
+
+# Üretilen örnek/test verileri (npm run sample → dev/sample.csv; F5 ve önizleme bunu kullanır)
+dev/*.csv
+
+# Kişisel araç ayarları
+.claude/
+
+# Günlükler
+*.log
+npm-debug.log*
+
+# İşletim sistemi
+.DS_Store
+Thumbs.db
+desktop.ini

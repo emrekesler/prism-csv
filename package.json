@@ -1,0 +1,135 @@
+{
+  "name": "prism-csv",
+  "displayName": "Prism CSV — Table Editor & Viewer",
+  "description": "%description%",
+  "version": "1.0.0",
+  "publisher": "emrekesler",
+  "author": {
+    "name": "Emre Kesler"
+  },
+  "icon": "media/icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/emrekesler/prism-csv.git"
+  },
+  "bugs": {
+    "url": "https://github.com/emrekesler/prism-csv/issues"
+  },
+  "homepage": "https://github.com/emrekesler/prism-csv#readme",
+  "galleryBanner": {
+    "color": "#0B1020",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Data Science",
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "csv",
+    "tsv",
+    "table",
+    "editor",
+    "viewer",
+    "spreadsheet",
+    "excel",
+    "grid",
+    "rainbow",
+    "filter",
+    "sort",
+    "data"
+  ],
+  "main": "./extension.js",
+  "l10n": "./l10n",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": true
+  },
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "prismCsv.table",
+        "displayName": "%customEditor.displayName%",
+        "selector": [
+          { "filenamePattern": "*.csv" },
+          { "filenamePattern": "*.tsv" },
+          { "filenamePattern": "*.tab" },
+          { "filenamePattern": "*.psv" }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "prismCsv.openTable",
+        "title": "%command.openTable%",
+        "category": "Prism CSV",
+        "icon": "$(table)"
+      },
+      {
+        "command": "prismCsv.openText",
+        "title": "%command.openText%",
+        "category": "Prism CSV",
+        "icon": "$(go-to-file)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "prismCsv.openTable",
+          "when": "resourceExtname =~ /^\\.(csv|tsv|tab|psv)$/i && activeEditor == 'workbench.editors.files.textFileEditor'",
+          "group": "navigation"
+        },
+        {
+          "command": "prismCsv.openText",
+          "when": "activeCustomEditorId == 'prismCsv.table'",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "%config.title%",
+      "properties": {
+        "prismCsv.colorMode": {
+          "type": "string",
+          "enum": ["text", "background", "off"],
+          "enumDescriptions": [
+            "%config.colorMode.text%",
+            "%config.colorMode.background%",
+            "%config.colorMode.off%"
+          ],
+          "default": "text",
+          "description": "%config.colorMode%"
+        },
+        "prismCsv.density": {
+          "type": "string",
+          "enum": ["comfortable", "compact"],
+          "enumDescriptions": ["%config.density.comfortable%", "%config.density.compact%"],
+          "default": "comfortable",
+          "description": "%config.density%"
+        },
+        "prismCsv.font": {
+          "type": "string",
+          "enum": ["mono", "ui"],
+          "enumDescriptions": ["%config.font.mono%", "%config.font.ui%"],
+          "default": "mono",
+          "description": "%config.font%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "package": "npx --yes @vscode/vsce@3.2.2 package",
+    "test": "node dev/test-core.js",
+    "check-l10n": "node dev/check-l10n.js",
+    "preview": "node dev/serve.js",
+    "sample": "node dev/make-sample.js",
+    "screenshot": "node dev/screenshot.js"
+  }
+}

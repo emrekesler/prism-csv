@@ -1,0 +1,17 @@
+{
+  "description": "Open CSV/TSV files as a fast, colorful table: edit cells, drag & drop columns, filter, multi-sort, value lists and column statistics.",
+  "customEditor.displayName": "Prism CSV Table",
+  "command.openTable": "Open in Table View",
+  "command.openText": "Open as Text",
+  "config.title": "Prism CSV",
+  "config.colorMode": "How columns are colored.",
+  "config.colorMode.text": "Color the cell text with the column color",
+  "config.colorMode.background": "Lightly tint the column background",
+  "config.colorMode.off": "No column colors",
+  "config.density": "Row height.",
+  "config.density.comfortable": "Comfortable (30px)",
+  "config.density.compact": "Compact (24px)",
+  "config.font": "Font used in cells.",
+  "config.font.mono": "Editor font (monospace)",
+  "config.font.ui": "Interface font"
+}

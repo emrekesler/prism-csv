@@ -1,0 +1,8 @@
+.vscode/**
+.claude/**
+.github/**
+dev/**
+docs/**
+**/*.vsix
+.gitignore
+.gitattributes

@@ -1,0 +1,17 @@
+{
+  "description": "CSV/TSV dosyalarını hızlı ve renkli bir tabloda açar: hücre düzenleme, sütunları sürükleyip taşıma, filtreleme, çoklu sıralama, değer listeleri ve sütun istatistikleri.",
+  "customEditor.displayName": "Prism CSV Tablo",
+  "command.openTable": "Tablo Görünümünde Aç",
+  "command.openText": "Metin Olarak Aç",
+  "config.title": "Prism CSV",
+  "config.colorMode": "Sütun renklendirme modu.",
+  "config.colorMode.text": "Hücre metni sütun rengiyle boyanır",
+  "config.colorMode.background": "Sütun arka planı hafifçe renklendirilir",
+  "config.colorMode.off": "Renklendirme kapalı",
+  "config.density": "Satır yüksekliği.",
+  "config.density.comfortable": "Rahat (30px)",
+  "config.density.compact": "Sıkı (24px)",
+  "config.font": "Hücrelerde kullanılacak yazı tipi.",
+  "config.font.mono": "Editör yazı tipi (eş aralıklı)",
+  "config.font.ui": "Arayüz yazı tipi"
+}

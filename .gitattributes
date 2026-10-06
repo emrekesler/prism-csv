@@ -1,0 +1,5 @@
+# Metin dosyaları depoda ve çalışma kopyasında LF; Windows'ta da aynı kalır.
+* text=auto eol=lf
+
+*.png binary
+*.vsix binary

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Prism CSV — önizleme</title>
+<style>
+  /* VS Code "Dark Modern" / "Light Modern" temalarının yaklaşık değişkenleri */
+  :root {
+    --vscode-font-family: "Segoe WPC", "Segoe UI", sans-serif;
+    --vscode-editor-font-family: Consolas, "Courier New", monospace;
+    --vscode-editor-background: #1f1f1f;
+    --vscode-editor-foreground: #cccccc;
+    --vscode-descriptionForeground: #9d9d9d;
+    --vscode-focusBorder: #0078d4;
+    --vscode-editorWidget-background: #202020;
+    --vscode-editorWidget-border: #313131;
+    --vscode-input-background: #313131;
+    --vscode-button-background: #0078d4;
+    --vscode-button-foreground: #ffffff;
+    --vscode-button-hoverBackground: #026ec1;
+    --vscode-button-secondaryBackground: #313131;
+    --vscode-button-secondaryForeground: #cccccc;
+    --vscode-textLink-foreground: #4daafc;
+    --vscode-list-hoverBackground: #2a2d2e;
+    --vscode-editorHoverWidget-background: #202020;
+    --vscode-editorHoverWidget-border: #454545;
+    --vscode-scrollbarSlider-background: rgba(121, 121, 121, 0.4);
+    --vscode-scrollbarSlider-hoverBackground: rgba(100, 100, 100, 0.7);
+    --vscode-editor-findMatchHighlightBackground: rgba(234, 92, 0, 0.33);
+  }
+  :root.light {
+    --vscode-editor-background: #ffffff;
+    --vscode-editor-foreground: #3b3b3b;
+    --vscode-descriptionForeground: #6f6f6f;
+    --vscode-focusBorder: #005fb8;
+    --vscode-editorWidget-background: #f8f8f8;
+    --vscode-editorWidget-border: #e5e5e5;
+    --vscode-input-background: #ffffff;
+    --vscode-button-background: #005fb8;
+    --vscode-button-hoverBackground: #0258a8;
+    --vscode-button-secondaryBackground: #e5e5e5;
+    --vscode-button-secondaryForeground: #3b3b3b;
+    --vscode-textLink-foreground: #005fb8;
+    --vscode-list-hoverBackground: #f2f2f2;
+    --vscode-editorHoverWidget-background: #f8f8f8;
+    --vscode-editorHoverWidget-border: #c8c8c8;
+    --vscode-scrollbarSlider-background: rgba(100, 100, 100, 0.4);
+    --vscode-editor-findMatchHighlightBackground: rgba(234, 92, 0, 0.33);
+  }
+</style>
+<link rel="stylesheet" href="/media/main.css">
+</head>
+<body class="vscode-dark">
+<script src="/media/csv-core.js"></script>
+<script>
+  // extension.js'in belge modelini taklit eder: düzenlemeler aynı çekirdek fonksiyonlarla metne uygulanır.
+  const params = new URLSearchParams(location.search);
+  if (params.has('light')) {
+    document.documentElement.classList.add('light');
+    document.body.className = 'vscode-light';
+  }
+  const file = params.get('file') || '/dev/sample.csv';
+  const editable = !params.has('readonly');
+  const doc = { text: '', saved: '', undo: [], redo: [] };
+  window.__doc = doc;
+  const send = (m) => window.postMessage(m, '*');
+  const state = () => ({ editable, dirty: doc.text !== doc.saved });
+  const change = (next) => { doc.undo.push(doc.text); doc.redo = []; doc.text = next; send({ type: 'state', ...state() }); };
+  let vsState = null;
+  window.acquireVsCodeApi = () => ({
+    postMessage(m) {
+      console.log('[eklentiye]', m.type, m);
+      switch (m.type) {
+        case 'ready':
+          // Dosya yoksa tabloda nasıl üretileceği gösterilir.
+          fetch(file).then((r) => (r.ok ? r.text() : `Message\n"${file} not found. Run: npm run sample"\n`)).then((text) => {
+            doc.text = doc.saved = text;
+            send({ type: 'init', text, fileName: file.split('/').pop(), ext: '.' + file.split('.').pop(), config: {}, ...state() });
+          });
+          break;
+        case 'edit':
+          change(PrismCsv.applyChanges(doc.text, PrismCsv.cellEditChanges(doc.text, m.delim, m.edits)));
+          break;
+        case 'reorder':
+          change(PrismCsv.reorderColumns(doc.text, m.delim, m.order));
+          break;
+        case 'getText':
+          send({ type: 'data', reason: 'refresh', text: doc.text, ...state() });
+          break;
+        case 'save':
+          doc.saved = doc.text;
+          send({ type: 'saved', ok: true });
+          send({ type: 'state', ...state() });
+          break;
+        case 'undo':
+        case 'redo': {
+          const from = m.type === 'undo' ? doc.undo : doc.redo, to = m.type === 'undo' ? doc.redo : doc.undo;
+          if (!from.length) break;
+          to.push(doc.text);
+          doc.text = from.pop();
+          send({ type: 'data', text: doc.text, ...state() });
+          break;
+        }
+      }
+    },
+    getState: () => vsState,
+    setState: (s) => { vsState = s; },
+  });
+
+  // Eklentinin sayfaya gömdüğü dil bilgisini taklit eder: ?lang=tr → Türkçe paket, aksi halde İngilizce.
+  const lang = params.get('lang') || 'en';
+  const bundleUrl = lang === 'en' ? null : `/l10n/bundle.l10n.${lang.split('-')[0]}.json`;
+  (bundleUrl ? fetch(bundleUrl).then((r) => (r.ok ? r.json() : {})) : Promise.resolve({})).then((bundle) => {
+    const data = document.createElement('script');
+    data.id = 'l10n';
+    data.type = 'application/json';
+    data.textContent = JSON.stringify({ lang, bundle });
+    const main = document.createElement('script');
+    main.src = '/media/main.js';
+    document.body.append(data, main);
+    if (params.has('demo')) {
+      const demo = document.createElement('script');
+      demo.src = '/dev/demo.js';
+      document.body.append(demo);
+    }
+  });
+</script>
+</body>
+</html>
