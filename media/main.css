@@ -457,6 +457,12 @@ body.col-dragging, body.col-dragging * { cursor: grabbing !important; user-selec
 .mi .hint { margin-left: auto; color: var(--muted); font-size: 11.5px; }
 .mi .check { margin-left: auto; color: var(--accent); }
 .mi .hint + .check { margin-left: 8px; }
+.mi.danger { color: var(--vscode-errorForeground, #f48771); }
+.mi.danger > .i { opacity: 1; }
+.mi.danger:hover { background: color-mix(in srgb, var(--danger) 15%, transparent); }
+.pop.ctx { min-width: 250px; padding: 5px; }
+.pop.ctx .mi { height: 28px; }
+.pop.ctx .pm-sep { margin: 4px 6px; }
 
 .vf-search {
   display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 9px; margin-bottom: 6px;

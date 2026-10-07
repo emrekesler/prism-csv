@@ -133,32 +133,43 @@ class CsvTableProvider {
       });
     };
 
-    const editCells = (msg) => enqueue(() => {
-      const text = document.getText();
-      const starts = recordStarts(msg.delim);
-      const changes = core.cellEditChanges(text, msg.delim, msg.edits, starts);
+    /** Ofsetli metin değişikliklerini ({ start, end, text }) tek düzenleme olarak uygular. */
+    const applyChanges = (changes, after) => {
       if (!changes.length) return;
       return applySelf((we) => {
         for (const ch of changes) {
           we.replace(document.uri, new vscode.Range(document.positionAt(ch.start), document.positionAt(ch.end)), ch.text);
         }
-        return () => {
-          if (index && index.starts === starts) {
-            core.shiftIndex(starts, changes);
-            index.version = document.version;
-          }
-        };
+        return after;
       });
-    });
-
-    const reorder = (msg) => enqueue(() => {
-      const text = document.getText();
-      const next = core.reorderColumns(text, msg.delim, msg.order);
+    };
+    /** Belgenin tamamını yeni metinle değiştirir (sütun işlemleri her satırı etkiler). */
+    const replaceAll = (text, next) => {
       if (next === text) return;
       return applySelf((we) => {
         we.replace(document.uri, new vscode.Range(document.positionAt(0), document.positionAt(text.length)), next);
         return () => { index = null; };
       });
+    };
+    const dropIndex = () => { index = null; };
+
+    const editCells = (msg) => enqueue(() => {
+      const starts = recordStarts(msg.delim);
+      const changes = core.cellEditChanges(document.getText(), msg.delim, msg.edits, starts);
+      return applyChanges(changes, () => {
+        if (index && index.starts === starts) {
+          core.shiftIndex(starts, changes);
+          index.version = document.version;
+        }
+      });
+    });
+    const deleteRows = (msg) => enqueue(() =>
+      applyChanges(core.deleteRecordsChanges(document.getText(), msg.delim, msg.records, recordStarts(msg.delim)), dropIndex));
+    const insertRow = (msg) => enqueue(() =>
+      applyChanges(core.insertRecordChanges(document.getText(), msg.delim, msg.at, msg.ncols, recordStarts(msg.delim)), dropIndex));
+    const columnOp = (msg, op) => enqueue(() => {
+      const text = document.getText();
+      return replaceAll(text, op(text));
     });
 
     let timer;
@@ -194,8 +205,23 @@ class CsvTableProvider {
           case 'edit':
             editCells(msg);
             break;
+          case 'deleteRows':
+            deleteRows(msg);
+            break;
+          case 'insertRow':
+            insertRow(msg);
+            break;
           case 'reorder':
-            reorder(msg);
+            columnOp(msg, (text) => core.reorderColumns(text, msg.delim, msg.order));
+            break;
+          case 'deleteColumns':
+            columnOp(msg, (text) => core.deleteColumns(text, msg.delim, msg.cols));
+            break;
+          case 'insertColumn':
+            columnOp(msg, (text) => core.insertColumn(text, msg.delim, msg.at));
+            break;
+          case 'readClipboard':
+            webview.postMessage({ type: 'clipboard', text: await vscode.env.clipboard.readText() });
             break;
           case 'save':
             queue = queue.then(async () => {

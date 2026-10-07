@@ -81,6 +81,14 @@
     lock: '<rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>',
     pencil: '<path d="M10.5 3 13 5.5 6 12.5H3.5V10z"/><path d="m9 4.5 2.5 2.5"/>',
     refresh: '<path d="M13 8a5 5 0 1 1-1.46-3.54M13 2.5v3h-3"/>',
+    scissors: '<circle cx="4.5" cy="11.5" r="2"/><circle cx="11.5" cy="11.5" r="2"/><path d="M6 10 12.5 2.5M10 10 3.5 2.5"/>',
+    eraser: '<path d="M6.5 13.5h7M3.3 10.2l6.5-6.5a1.4 1.4 0 0 1 2 0l1.5 1.5a1.4 1.4 0 0 1 0 2L7.8 12.7H5.8z"/><path d="m6.3 7.2 3.5 3.5"/>',
+    trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.6a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8.6M7 7v4.5M9 7v4.5"/>',
+    rowAbove: '<rect x="2.5" y="8.5" width="11" height="5" rx="1.25"/><path d="M8 1.75v5M5.5 4.25h5"/>',
+    rowBelow: '<rect x="2.5" y="2.5" width="11" height="5" rx="1.25"/><path d="M8 9.25v5M5.5 11.75h5"/>',
+    colLeft: '<rect x="8.5" y="2.5" width="5" height="11" rx="1.25"/><path d="M1.75 8h5M4.25 5.5v5"/>',
+    colRight: '<rect x="2.5" y="2.5" width="5" height="11" rx="1.25"/><path d="M9.25 8h5M11.75 5.5v5"/>',
+    blank: '',
   };
   const icon = (n, cls) =>
     `<svg class="i${cls ? ' ' + cls : ''}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -391,7 +399,9 @@
     S.types = move(S.types);
     S.hidden = new Set([...S.hidden].map((c) => inv[c]).filter((c) => c !== undefined));
     S.sort = S.sort.map((s) => ({ col: inv[s.col], dir: s.dir })).filter((s) => s.col !== undefined);
-    S.edited = new Set([...S.edited].map((key) => { const [r, c] = key.split(','); return r + ',' + inv[+c]; }));
+    S.edited = new Set([...S.edited]
+      .map((key) => { const [r, c] = key.split(','); return inv[+c] === undefined ? null : r + ',' + inv[+c]; })
+      .filter(Boolean));
   }
 
   /** Başlıklar benzersiz ve yalnızca yer değiştirmişse inv[eski] = yeni döndürür. */
@@ -1092,14 +1102,145 @@
     return edits.length;
   }
 
-  function clearSelectionCells() {
+  function clearSelectionCells(quiet) {
     const r = selRect();
     if (!r) return;
     if ((r.r1 - r.r0 + 1) * (r.k1 - r.k0 + 1) > 200000) { toast(t('Selection too large (max {0} cells)', nf.format(200000)), true); return; }
     const list = [];
     for (let i = r.r0; i <= r.r1; i++) for (let k = r.k0; k <= r.k1; k++) list.push({ r: S.view[i], c: S.visCols[k], value: '' });
     const n = commitEdits(list);
-    if (n > 1) toast(t('{0} cells cleared', nf.format(n)));
+    if (n > 1 && !quiet) toast(t('{0} cells cleared', nf.format(n)));
+  }
+  function cutSelection() {
+    if (!canEdit()) { denyEdit(); return; }
+    copySelection();
+    clearSelectionCells(true);
+  }
+
+  // ── Satır ve sütun ekleme/silme ──
+  // Yerel veri, eklentinin belgeye uyguladığı değişiklikle (csv-core.js) birebir aynı şekilde güncellenir;
+  // dev/test-core.js bu eşliği rastgele dosyalarla doğrular.
+  const headOffset = () => (S.hasHeader ? 1 : 0);
+  const remapEditedRows = (fn) => {
+    S.edited = new Set([...S.edited].map((key) => {
+      const [r, c] = key.split(',').map(Number), nr = fn(r);
+      return nr === null ? null : nr + ',' + c;
+    }).filter(Boolean));
+  };
+  /** Boş başlıklı ya da başlıksız sütunların adları konuma bağlıdır; yapı değişince yenilenir. */
+  function refreshNames() {
+    S.cols.forEach((col, c) => {
+      const h = (S.headerRow[c] ?? '').trim();
+      col.name = h || (S.hasHeader ? t('Column {0}', c + 1) : letter(c));
+    });
+  }
+  function afterStructure() {
+    S.textStale = true;
+    S.dirty = true;
+    clearCaches();
+    updateColorStyles();
+    computeLayout();
+    buildHeader();
+    clampSel();
+    scheduleRender();
+    renderStatus();
+    renderChips();
+    renderChrome();
+    renderEmpty();
+    if (S.drawer) renderDrawer();
+    saveState();
+  }
+
+  /** rs: veri satırı dizinleri */
+  function deleteRows(rs) {
+    if (!canEdit()) { denyEdit(); return; }
+    commitEdit();
+    const del = [...new Set(rs)].sort((a, b) => a - b);
+    if (!del.length) return;
+    const gone = new Set(del);
+    const shift = (r) => r - upper(del, r - 1);
+    const i0 = S.sel ? Math.min(S.sel.ar, S.sel.fr) : 0, k = S.sel ? S.sel.fk : 0;
+    S.rows = S.rows.filter((_, r) => !gone.has(r));
+    S.view = S.view.filter((r) => !gone.has(r)).map(shift);
+    remapEditedRows((r) => (gone.has(r) ? null : shift(r)));
+    vscode.postMessage({ type: 'deleteRows', delim: S.delim, records: del.map((r) => r + headOffset()) });
+    S.sel = { ar: i0, ak: k, fr: i0, fk: k };
+    afterStructure();
+    toast(tn(del.length, '{0} row deleted · Ctrl+Z to undo', '{0} rows deleted · Ctrl+Z to undo'));
+  }
+
+  /** r veri satırının üstüne ya da altına boş satır ekler; görünümde de tıklanan satırın yanına yerleşir. */
+  function insertRow(r, below) {
+    if (!canEdit()) { denyEdit(); return; }
+    if (!S.ncols) return;
+    commitEdit();
+    const at = below ? r + 1 : r;
+    const pos = S.view.indexOf(r);
+    const insertPos = pos < 0 ? S.view.length : below ? pos + 1 : pos;
+    S.rows.splice(at, 0, new Array(S.ncols).fill(''));
+    S.view = S.view.map((x) => (x >= at ? x + 1 : x));
+    S.view.splice(insertPos, 0, at);
+    remapEditedRows((x) => (x >= at ? x + 1 : x));
+    if (S.sort.length || hasFilters()) S.viewStale = true;
+    vscode.postMessage({ type: 'insertRow', delim: S.delim, at: at + headOffset(), ncols: S.ncols });
+    const k = S.sel ? S.sel.fk : 0;
+    S.sel = { ar: insertPos, ak: k, fr: insertPos, fk: k };
+    afterStructure();
+    ensureVisible(insertPos, S.sel ? S.sel.fk : undefined);
+  }
+
+  function deleteColumns(cs) {
+    if (!canEdit()) { denyEdit(); return; }
+    commitEdit();
+    const del = new Set(cs);
+    if (!del.size) return;
+    if (del.size >= S.ncols) { toast(t('At least one column must remain'), true); return; }
+    const keep = [], inv = [];
+    for (let c = 0; c < S.ncols; c++) if (!del.has(c)) { inv[c] = keep.length; keep.push(c); }
+    const strip = (row) => {
+      const out = [];
+      for (let c = 0; c < row.length; c++) if (!del.has(c)) out.push(row[c]);
+      return out.length ? out : [''];
+    };
+    S.rows = S.rows.map(strip);
+    if (S.hasHeader) S.headerRow = strip(S.headerRow);
+    S.cols = keep.map((c) => S.cols[c]);
+    remapState(inv);
+    S.ncols = keep.length;
+    refreshNames();
+    vscode.postMessage({ type: 'deleteColumns', delim: S.delim, cols: [...del] });
+    afterStructure();
+    apply(); // silinen sütunlardaki filtre/sıralama kalktı
+    toast(tn(del.size, '{0} column deleted · Ctrl+Z to undo', '{0} columns deleted · Ctrl+Z to undo'));
+  }
+
+  /** at konumuna boş sütun ekler; başlık satırı varsa hemen adını sorar. */
+  function insertColumn(at) {
+    if (!canEdit()) { denyEdit(); return; }
+    if (!S.ncols) return;
+    commitEdit();
+    const add = (row) => {
+      while (row.length < at) row.push('');
+      row.splice(at, 0, '');
+    };
+    S.rows.forEach(add);
+    if (S.hasHeader) add(S.headerRow);
+    const inv = [];
+    for (let c = 0; c < S.ncols; c++) inv[c] = c >= at ? c + 1 : c;
+    remapState(inv);
+    const ci = Math.max(...S.cols.map((col) => col.ci)) + 1;
+    S.cols.splice(at, 0, { name: '', auto: 'text', type: 'text', dec: '.', dmy: true, w: 150, ci });
+    S.ncols++;
+    refreshNames();
+    vscode.postMessage({ type: 'insertColumn', delim: S.delim, at });
+    afterStructure();
+    const k = S.visCols.indexOf(at);
+    if (S.sel) {
+      S.sel = { ar: S.sel.fr, ak: k, fr: S.sel.fr, fk: k };
+      ensureVisible(S.sel.fr, k);
+      scheduleRender();
+    } else $vp.scrollLeft = Math.max(0, S.xs[k] - 40);
+    if (S.hasHeader) startRename(at);
   }
 
   function pasteGrid(text) {
@@ -1331,7 +1472,7 @@
     let rr;
     if (!r) {
       rr = `<span class="hint">${canEdit()
-        ? t('Double-click / Enter: edit · Drag header: move · Space: row details · Shift+click: multi-sort')
+        ? t('Double-click / Enter: edit · Right-click: row & column actions · Drag header: move · Shift+click: multi-sort')
         : t('Shift+click: multi-sort · Space: row details · Ctrl+F: search')}</span>`;
     } else if (r.r0 === r.r1 && r.k0 === r.k1) {
       const c = S.visCols[r.k0];
@@ -1373,7 +1514,7 @@
   function renderEmpty() {
     let h = '';
     if (!S.rows.length) {
-      h = `<div class="empty-card"><div class="empty-ico">${icon('table')}</div><div class="big">${t('No data to show')}</div><div>${t('The file is empty or contains only a header row.')}</div></div>`;
+      h = `<div class="empty-card"><div class="empty-ico">${icon('table')}</div><div class="big">${t('No data to show')}</div><div>${t('The file is empty or contains only a header row.')}</div>${canEdit() && S.ncols ? `<button class="btn" data-act="add-row">${t('Add row')}</button>` : ''}</div>`;
     } else if (!S.view.length) {
       h = `<div class="empty-card"><div class="empty-ico">${icon('filter')}</div><div class="big">${t('No matching rows')}</div><div>${t('Try loosening the filters or changing the search.')}</div><button class="btn" data-act="x-filters">${t('Clear filters')}</button></div>`;
     }
@@ -1493,7 +1634,10 @@
     el.className = 'pop ' + (cls || '');
     el.innerHTML = html;
     document.body.appendChild(el);
-    const ar = anchor.getBoundingClientRect(), pr = el.getBoundingClientRect();
+    // anchor bir öğe ya da fare konumu ({ x, y }) olabilir.
+    const isEl = anchor instanceof Element;
+    const ar = isEl ? anchor.getBoundingClientRect() : { left: anchor.x, right: anchor.x, top: anchor.y, bottom: anchor.y };
+    const pr = el.getBoundingClientRect();
     let left = align === 'right' ? ar.right - pr.width : ar.left;
     left = clamp(left, 8, window.innerWidth - pr.width - 8);
     let top = ar.bottom + 6;
@@ -1501,9 +1645,68 @@
     el.style.left = left + 'px';
     el.style.top = top + 'px';
     pop = el;
-    popAnchor = anchor;
-    anchor.classList.add('open');
+    popAnchor = isEl ? anchor : null;
+    if (isEl) anchor.classList.add('open');
     return el;
+  }
+
+  /** items: [{ label, icon, hint, run, danger }] ya da '-' (ayraç). Fare konumunda açılır. */
+  function openContextMenu(x, y, items) {
+    const list = [];
+    for (const it of items) {
+      if (it === '-' && (!list.length || list[list.length - 1] === '-')) continue;
+      list.push(it);
+    }
+    if (list[list.length - 1] === '-') list.pop();
+    const html = list.map((it, n) => (it === '-'
+      ? '<div class="pm-sep"></div>'
+      : `<button class="mi${it.danger ? ' danger' : ''}" data-n="${n}">${icon(it.icon || 'blank')}${esc(it.label)}${it.hint ? `<span class="hint">${it.hint}</span>` : ''}</button>`)).join('');
+    const el = openPop({ x, y }, html, 'ctx', 'left');
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-n]');
+      if (!b) return;
+      closePop();
+      list[+b.dataset.n].run();
+    });
+  }
+
+  /** Hücre ya da satır numarasına sağ tık menüsü (seçime göre). */
+  function openGridMenu(x, y, rowMode) {
+    const r = selRect();
+    if (!r) return;
+    const nRows = r.r1 - r.r0 + 1, nCols = r.k1 - r.k0 + 1, single = nRows === 1 && nCols === 1;
+    const rows = [];
+    for (let i = r.r0; i <= r.r1; i++) rows.push(S.view[i]);
+    const cols = S.visCols.slice(r.k0, r.k1 + 1);
+    const ed = canEdit(), items = [];
+    if (rowMode) {
+      items.push({ label: nRows === 1 ? t('Copy row') : t('Copy {0} rows', nf.format(nRows)), icon: 'copy', hint: 'Ctrl+C', run: copySelection });
+    } else {
+      if (ed) items.push({ label: t('Cut'), icon: 'scissors', hint: 'Ctrl+X', run: cutSelection });
+      items.push({ label: t('Copy'), icon: 'copy', hint: 'Ctrl+C', run: copySelection });
+      if (ed) items.push({ label: t('Paste'), icon: 'clipboard', hint: 'Ctrl+V', run: () => vscode.postMessage({ type: 'readClipboard' }) });
+      if (ed && single) items.push({ label: t('Edit cell'), icon: 'pencil', hint: 'Enter', run: () => startEdit(r.r0, r.k0) });
+      if (ed) items.push({ label: t('Clear contents'), icon: 'eraser', hint: 'Del', run: () => clearSelectionCells() });
+    }
+    if (ed) {
+      items.push('-',
+        { label: t('Insert row above'), icon: 'rowAbove', run: () => insertRow(S.view[r.r0], false) },
+        { label: t('Insert row below'), icon: 'rowBelow', run: () => insertRow(S.view[r.r1], true) },
+        { label: nRows === 1 ? t('Delete row') : t('Delete {0} rows', nf.format(nRows)), icon: 'trash', danger: true, run: () => deleteRows(rows) });
+      if (!rowMode) {
+        items.push('-',
+          { label: t('Insert column left'), icon: 'colLeft', run: () => insertColumn(cols[0]) },
+          { label: t('Insert column right'), icon: 'colRight', run: () => insertColumn(cols[cols.length - 1] + 1) },
+          { label: nCols === 1 ? t('Delete column') : t('Delete {0} columns', nf.format(nCols)), icon: 'trash', danger: true, run: () => deleteColumns(cols) });
+      }
+    }
+    items.push('-');
+    if (single && !rowMode) {
+      const c = cols[0], v = S.rows[rows[0]][c] ?? '';
+      items.push({ label: t('Filter by this value'), icon: 'filter', run: () => { S.vf[c] = { mode: 'in', set: new Set([v]) }; buildHeader(); filterNow(); } });
+    }
+    items.push({ label: t('Row details'), icon: 'panel', hint: 'Space', run: () => toggleDrawer(true) });
+    openContextMenu(x, y, items);
   }
   function closePop() {
     if (!pop) return false;
@@ -1589,7 +1792,12 @@
         <button class="mi" data-act="hide">${icon('eyeOff')}${t('Hide column')}</button>
         <button class="mi" data-act="copycol">${icon('copy')}${t('Copy values')}<span class="hint">${tn(S.view.length, '{0} row', '{0} rows')}</span></button>
         <button class="mi" data-act="fit">${icon('fit')}${t('Fit width to content')}</button>
-      </div>`, 'colmenu', 'left');
+      </div>
+      ${canEdit() ? `<div class="pm-sec">
+        <button class="mi" data-act="ins-left">${icon('colLeft')}${t('Insert column left')}</button>
+        <button class="mi" data-act="ins-right">${icon('colRight')}${t('Insert column right')}</button>
+        <button class="mi danger" data-act="delcol">${icon('trash')}${t('Delete column')}</button>
+      </div>` : ''}`, 'colmenu', 'left');
 
     const list = el.querySelector('.vf-list'), inp = el.querySelector('.vf-search input');
     const emptyLabel = t('(empty)'), onlyLabel = t('only');
@@ -1656,6 +1864,12 @@
       } else if (act === 'rename') {
         closePop();
         startRename(c);
+      } else if (act === 'ins-left' || act === 'ins-right') {
+        closePop();
+        insertColumn(act === 'ins-left' ? c : c + 1);
+      } else if (act === 'delcol') {
+        closePop();
+        deleteColumns([c]);
       } else if (act === 'hide') {
         S.hidden.add(c);
         closePop();
@@ -1993,6 +2207,31 @@
     drag = null;
     if (colDrag) endColDrag();
   });
+  // Sağ tık: VS Code'un varsayılan Kes/Kopyala/Yapıştır menüsü yerine kendi menülerimiz.
+  $tbody.addEventListener('contextmenu', (e) => {
+    const tr = e.target.closest('.tr');
+    if (!tr) return;
+    e.preventDefault();
+    commitEdit();
+    const i = +tr.dataset.i, onRn = !!e.target.closest('.rn'), td = e.target.closest('.td');
+    const k = td ? +td.dataset.k : 0, lastK = S.visCols.length - 1;
+    const r = selRect();
+    const inside = r && i >= r.r0 && i <= r.r1 && (onRn ? r.k0 === 0 && r.k1 === lastK : k >= r.k0 && k <= r.k1);
+    if (!inside) {
+      if (onRn) setSel(i, 0, i, lastK);
+      else if (td) setSel(i, k, i, k);
+      else return;
+    }
+    $vp.focus({ preventScroll: true });
+    openGridMenu(e.clientX, e.clientY, onRn);
+  });
+  $thead.addEventListener('contextmenu', (e) => {
+    const hc = e.target.closest('.hc');
+    if (!hc || e.target.closest('input')) return;
+    e.preventDefault();
+    openColMenu(+hc.dataset.c, hc.querySelector('.hc-btn'));
+  });
+
   $tbody.addEventListener('mouseover', (e) => {
     const td = e.target.closest('.td');
     if (!td || td.title || td.scrollWidth <= td.clientWidth) return;
@@ -2033,7 +2272,10 @@
     buildHeader();
     filterNow();
   });
-  $empty.addEventListener('click', (e) => { if (e.target.closest('[data-act="x-filters"]')) clearAll(false); });
+  $empty.addEventListener('click', (e) => {
+    if (e.target.closest('[data-act="x-filters"]')) clearAll(false);
+    else if (e.target.closest('[data-act="add-row"]')) insertRow(-1, true);
+  });
   $banner.addEventListener('click', (e) => {
     const b = e.target.closest('[data-act]');
     if (!b) return;
@@ -2084,6 +2326,12 @@
       if (window.getSelection().toString()) return;
       e.preventDefault();
       copySelection();
+      return;
+    }
+    if (mod && key.toLowerCase() === 'x') {
+      if (window.getSelection().toString()) return;
+      e.preventDefault();
+      cutSelection();
       return;
     }
     if (mod && key.toLowerCase() === 'a') {
@@ -2163,6 +2411,11 @@
     if (m.type === 'saved') {
       if (m.ok) toast(t('Saved'));
       else toast(t('Save failed'), true);
+      return;
+    }
+    if (m.type === 'clipboard') {
+      if (m.text) pasteGrid(m.text);
+      else toast(t('The clipboard is empty'), true);
       return;
     }
     if (m.type === 'editFailed') { toast(t('Could not apply the change: {0}', m.message || ''), true); return; }

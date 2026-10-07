@@ -91,4 +91,60 @@ test('rastgele: düzenleme sonrası ayrıştırma beklenen değeri verir', () =>
   }
 });
 
+test('satır silme satır sonunu da siler, boş satırları korur', () => {
+  const t = 'h\r\na\r\n\r\nb\r\nc';
+  const del = (recs) => core.applyChanges(t, core.deleteRecordsChanges(t, ',', recs));
+  assert.strictEqual(del([1]), 'h\r\n\r\nb\r\nc');
+  assert.strictEqual(del([2, 3]), 'h\r\na\r\n\r\n');
+});
+test('satır ekleme: araya, sona, tek sütunlu dosyaya', () => {
+  const ins = (t, at, n) => core.applyChanges(t, core.insertRecordChanges(t, ';', at, n));
+  assert.strictEqual(ins('a;b\r\n1;2\r\n', 1, 2), 'a;b\r\n;\r\n1;2\r\n');
+  assert.strictEqual(ins('a;b\n1;2\n', 2, 2), 'a;b\n1;2\n;\n');
+  assert.strictEqual(ins('a;b\n1;2', 2, 2), 'a;b\n1;2\n;');
+  assert.deepStrictEqual(core.parseCSV(ins('x\ny\n', 1, 1), ';'), [['x'], [''], ['y']]);
+});
+test('sütun silme ve ekleme ham alanları korur', () => {
+  assert.strictEqual(core.deleteColumns('a,"b,1",c\r\n1,2,3\r\n', ',', [1]), 'a,c\r\n1,3\r\n');
+  assert.strictEqual(core.deleteColumns('a,b\nx\n', ',', [0]), 'b\n""\n');
+  assert.strictEqual(core.insertColumn('a,"b,1"\n1\n', ',', 1), 'a,,"b,1"\n1,\n');
+  assert.strictEqual(core.insertColumn('a\n', ',', 2), 'a,,\n');
+});
+test('rastgele: yapısal işlemler webview\'daki yerel değişiklikle aynı sonucu verir', () => {
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const pieces = ['a', '', '"q"', 'x,y', 'l1\nl2', 'ş'];
+  // main.js'deki deleteRows / insertRow / deleteColumns / insertColumn ile aynı yerel dönüşümler
+  const local = {
+    delCols: (rows, del) => rows.map((r) => { const o = r.filter((_, k) => !del.has(k)); return o.length ? o : ['']; }),
+    insCol: (rows, at) => rows.map((r) => { const o = r.slice(); while (o.length < at) o.push(''); o.splice(at, 0, ''); return o; }),
+  };
+  for (let iter = 0; iter < 400; iter++) {
+    const rows = Array.from({ length: 1 + Math.floor(rnd() * 5) }, () =>
+      Array.from({ length: 1 + Math.floor(rnd() * 4) }, () => pieces[Math.floor(rnd() * pieces.length)]));
+    const eol = rnd() < 0.5 ? '\n' : '\r\n';
+    const text = rows.map((r) => r.map((v) => core.quoteField(v, ',', rnd() < 0.2)).join(',')).join(eol) + (rnd() < 0.5 ? eol : '');
+    const parsed = core.parseCSV(text, ',');
+    if (!parsed.length) continue;
+    const ncols = Math.max(...parsed.map((r) => r.length));
+    const ctx = JSON.stringify({ text });
+    const a = Math.floor(rnd() * parsed.length), c = Math.floor(rnd() * (ncols + 1));
+
+    const delRec = new Set([a, Math.floor(rnd() * parsed.length)]);
+    assert.deepStrictEqual(core.parseCSV(core.applyChanges(text, core.deleteRecordsChanges(text, ',', [...delRec])), ','),
+      parsed.filter((_, r) => !delRec.has(r)), 'satır sil ' + ctx);
+
+    const at = Math.floor(rnd() * (parsed.length + 1)), withRow = parsed.map((r) => r.slice());
+    withRow.splice(at, 0, new Array(ncols).fill(''));
+    assert.deepStrictEqual(core.parseCSV(core.applyChanges(text, core.insertRecordChanges(text, ',', at, ncols)), ','),
+      withRow, 'satır ekle ' + ctx);
+
+    if (ncols > 1) {
+      const del = new Set([Math.min(c, ncols - 1)]);
+      assert.deepStrictEqual(core.parseCSV(core.deleteColumns(text, ',', [...del]), ','), local.delCols(parsed, del), 'sütun sil ' + ctx);
+    }
+    assert.deepStrictEqual(core.parseCSV(core.insertColumn(text, ',', c), ','), local.insCol(parsed, c), 'sütun ekle ' + ctx);
+  }
+});
+
 console.log(`${passed} test geçti${process.exitCode ? ', hatalar var' : ''}`);

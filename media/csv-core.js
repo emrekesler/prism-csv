@@ -156,26 +156,65 @@
   }
 
   /**
-   * Sütunları yeniden sıralar. order[yeniKonum] = eskiSütun.
-   * Alanlar ham haliyle taşınır; satır sonları ve boş satırlar korunur.
+   * Her kaydın ham alanlarını fn(alanlar, kayıtNo) ile dönüştürür; satır sonları ve boş satırlar korunur.
+   * Tamamen boş kalan kayıt "" olarak yazılır, yoksa boş satır sayılıp kaybolurdu.
    */
-  function reorderColumns(text, delim, order) {
+  function transformColumns(text, delim, fn) {
     const D = delim.charCodeAt(0), n = text.length, f = [], out = [];
-    let i = startOf(text), pos = 0;
+    let i = startOf(text), pos = 0, rec = 0;
     while (i < n) {
       const s = i;
       i = scanRecord(text, D, i, f);
       if (isBlank(f)) continue;
-      const nf = f.length >> 1, parts = new Array(order.length);
-      for (let k = 0; k < order.length; k++) {
-        const o = order[k];
-        parts[k] = o < nf ? text.slice(f[2 * o], f[2 * o + 1]) : '';
-      }
-      out.push(text.slice(pos, s), parts.join(delim));
+      const raw = [];
+      for (let k = 0; k < f.length; k += 2) raw.push(text.slice(f[k], f[k + 1]));
+      const next = fn(raw, rec++);
+      out.push(text.slice(pos, s), next.length > 1 || (next.length === 1 && next[0] !== '') ? next.join(delim) : '""');
       pos = f[f.length - 1];
     }
     out.push(text.slice(pos));
     return out.join('');
+  }
+
+  /** Sütunları yeniden sıralar. order[yeniKonum] = eskiSütun. Alanlar ham haliyle taşınır. */
+  const reorderColumns = (text, delim, order) =>
+    transformColumns(text, delim, (raw) => order.map((o) => raw[o] ?? ''));
+
+  /** Verilen sütunları her kayıttan siler. */
+  function deleteColumns(text, delim, cols) {
+    const del = new Set(cols);
+    return transformColumns(text, delim, (raw) => raw.filter((_, k) => !del.has(k)));
+  }
+
+  /** at konumuna boş bir sütun ekler; kısa kayıtlar o konuma kadar boş alanla tamamlanır. */
+  function insertColumn(text, delim, at) {
+    return transformColumns(text, delim, (raw) => {
+      const r = raw.slice();
+      while (r.length < at) r.push('');
+      r.splice(at, 0, '');
+      return r;
+    });
+  }
+
+  /** Kayıtları satır sonlarıyla birlikte siler (aradaki boş satırlar korunur). */
+  function deleteRecordsChanges(text, delim, records, starts) {
+    starts = starts || recordIndex(text, delim);
+    const D = delim.charCodeAt(0), f = [];
+    return [...new Set(records)]
+      .filter((r) => r >= 0 && r < starts.length)
+      .sort((a, b) => a - b)
+      .map((r) => ({ start: starts[r], end: scanRecord(text, D, starts[r], f), text: '' }));
+  }
+
+  /** at numaralı kaydın önüne (at = kayıt sayısıysa dosya sonuna) ncols sütunlu boş bir kayıt ekler. */
+  function insertRecordChanges(text, delim, at, ncols, starts) {
+    starts = starts || recordIndex(text, delim);
+    const eol = text.indexOf('\r\n') >= 0 ? '\r\n' : '\n';
+    const row = ncols > 1 ? delim.repeat(ncols - 1) : '""';
+    if (at < starts.length) return [{ start: starts[at], end: starts[at], text: row + eol }];
+    const n = text.length, last = text.charCodeAt(n - 1);
+    const endsNl = n <= startOf(text) || last === LF || last === CR;
+    return [{ start: n, end: n, text: endsNl ? row + eol : eol + row }];
   }
 
   const DELIMS = [',', ';', '\t', '|'];
@@ -200,5 +239,8 @@
     return best;
   }
 
-  return { parseCSV, recordIndex, cellEditChanges, applyChanges, shiftIndex, reorderColumns, quoteField, detectDelimiter };
+  return {
+    parseCSV, recordIndex, cellEditChanges, applyChanges, shiftIndex, quoteField, detectDelimiter,
+    transformColumns, reorderColumns, deleteColumns, insertColumn, deleteRecordsChanges, insertRecordChanges,
+  };
 });

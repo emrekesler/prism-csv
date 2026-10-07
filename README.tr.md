@@ -16,6 +16,7 @@ Arayüz varsayılan olarak İngilizcedir; VS Code'un görüntüleme dili Türkç
 - **Toplu işlemler:** `Delete` seçili hücreleri temizler. `Ctrl+V` ile Excel'den kopyalanan blok seçili hücreden başlayarak yapıştırılır; tek bir değer yapıştırılırsa seçimin tamamına yazılır.
 - **Sütun taşıma:** Başlık sürüklenerek sütun yeri değiştirilir; dosyadaki tüm satırlar yeniden sıralanır.
 - **Yeniden adlandırma:** Sütun menüsündeki **Yeniden adlandır** seçeneği başlık satırını değiştirir.
+- **Sağ tık menüleri:** Hücre, satır numarası ve başlıkta: kes/kopyala/yapıştır, satır ve sütun ekleme/silme (birden fazla da olur), bir değere göre filtreleme, satır detayı. Silmeler `Ctrl+Z` ile geri alınır.
 - **Kaydet:** Değişiklik olduğunda araç çubuğundaki **Kaydet** düğmesi belirginleşir (`Ctrl+S` de olur). Geri al ve yinele düğmeleri ile `Ctrl+Z`/`Ctrl+Y` VS Code'un geçmişini kullanır. Kaydedilmemiş hücreler sol kenardaki sarı çizgiyle işaretlenir.
 - **Renkli sütunlar:** Her sütun kendi rengini alır, açık ve koyu temaya uyar. Görünüm menüsünden *Metin*, *Arka plan* ya da *Kapalı* seçilebilir.
 - **Sıralama:** Başlığa tıklayınca artan, tekrar tıklayınca azalan sıralar, üçüncü tıklama sıralamayı kaldırır. **Shift+tık** ile birden fazla sütuna göre sıralanabilir. Sayılar, tarihler ve metinler dile duyarlı sıralanır.
@@ -64,7 +65,7 @@ VSIX paketini üretin (ya da son [CI çalışmasının](https://github.com/emrek
 
 ```bash
 npm run package
-code --install-extension prism-csv-1.0.0.vsix
+code --install-extension prism-csv-1.1.0.vsix
 ```
 
 CSV dosyaları bundan sonra otomatik olarak tabloda açılır. Metin editörüne dönmek için araç çubuğundaki **Metin olarak aç** düğmesini (ya da *Reopen Editor With…*) kullanın.

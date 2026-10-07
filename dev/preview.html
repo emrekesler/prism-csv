@@ -84,6 +84,22 @@
         case 'reorder':
           change(PrismCsv.reorderColumns(doc.text, m.delim, m.order));
           break;
+        case 'deleteRows':
+          change(PrismCsv.applyChanges(doc.text, PrismCsv.deleteRecordsChanges(doc.text, m.delim, m.records)));
+          break;
+        case 'insertRow':
+          change(PrismCsv.applyChanges(doc.text, PrismCsv.insertRecordChanges(doc.text, m.delim, m.at, m.ncols)));
+          break;
+        case 'deleteColumns':
+          change(PrismCsv.deleteColumns(doc.text, m.delim, m.cols));
+          break;
+        case 'insertColumn':
+          change(PrismCsv.insertColumn(doc.text, m.delim, m.at));
+          break;
+        case 'readClipboard':
+          (navigator.clipboard ? navigator.clipboard.readText() : Promise.resolve(''))
+            .catch(() => '').then((text) => send({ type: 'clipboard', text }));
+          break;
         case 'getText':
           send({ type: 'data', reason: 'refresh', text: doc.text, ...state() });
           break;

@@ -16,6 +16,7 @@ The interface is in English by default and switches to Turkish when VS Code's di
 - **Bulk actions:** `Delete` clears the selected cells. `Ctrl+V` pastes a block copied from Excel starting at the selected cell; a single value fills the whole selection.
 - **Move columns:** Drag a header to a new position; every row in the file is reordered.
 - **Rename columns:** Use **Rename** in the column menu to change the header row.
+- **Right-click menus:** On cells, row numbers and headers: cut/copy/paste, insert or delete rows and columns (also several at once), filter by a value, row details. Deletions can be undone with `Ctrl+Z`.
 - **Save:** The **Save** button lights up when there are changes (`Ctrl+S` works too). Undo/redo buttons and `Ctrl+Z`/`Ctrl+Y` use VS Code's own history. Unsaved cells are marked with an amber bar.
 - **Colored columns:** Each column gets its own color, tuned for light and dark themes. Choose *Text*, *Background* or *Off* in the View menu.
 - **Sorting:** Click a header to sort ascending, again for descending, a third time to clear. **Shift+click** sorts by multiple columns. Numbers, dates and text sort correctly for your locale.
@@ -64,7 +65,7 @@ Build the VSIX (or download it from the artifacts of the latest [CI run](https:/
 
 ```bash
 npm run package
-code --install-extension prism-csv-1.0.0.vsix
+code --install-extension prism-csv-1.1.0.vsix
 ```
 
 CSV files then open in the table automatically. Use **Open as text** in the toolbar (or *Reopen Editor With…*) to switch back to the text editor.
